@@ -245,3 +245,15 @@ test('備份檢查：正常檔通過，缺欄位丟錯', () => {
   assert.throws(() => B.validateBackup('x'));
   assert.throws(() => B.validateBackup({ rooms: [{}], periods: [] }), /id/);
 });
+
+test('抄表期間文字：迄日或起日沒填時不出現問號，並提醒補填本次抄表日', () => {
+  assert.equal(B.dateRangeText('2026-03-05', '2026-05-05'), '2026-03-05 ～ 2026-05-05');
+  assert.equal(B.dateRangeText('2026-03-05', ''), '2026-03-05 起（本次抄表日未填）');
+  assert.equal(B.dateRangeText('', '2026-05-05'), '至 2026-05-05（上次抄表日未填）');
+  assert.equal(B.dateRangeText('', ''), '');
+  for (const s of [B.dateRangeText('2026-03-05', ''), B.dateRangeText('', '2026-05-05')]) assert.ok(!s.includes('?'));
+  const rooms = [{ id: 'a', room: 'A', meterId: 'M1', active: true }];
+  const mk = endDate => B.computePeriod({ rooms, settings: {}, period: { startDate: '2026-03-05', endDate, readings: { a: { prev: 0, curr: 10 } }, bill: {} } });
+  assert.ok(mk('').warnings.some(w => w.code === 'noEndDate'));
+  assert.ok(!mk('2026-05-05').warnings.some(w => w.code === 'noEndDate'));
+});

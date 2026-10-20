@@ -227,7 +227,7 @@
 
   function renderNotices(res, p) {
     const S = res.totals.settings, t = res.totals;
-    const range = (p.startDate || p.endDate) ? `${p.startDate || '?'} ～ ${p.endDate || '?'}` : '';
+    const range = B.dateRangeText(p.startDate, p.endDate);
     $('notices').innerHTML = res.lines.filter(l => l.status === 'ok').map(l => {
       const rd = l.reading || {};
       const rows = [

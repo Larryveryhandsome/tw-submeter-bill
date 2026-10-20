@@ -147,6 +147,7 @@
     const prevUse = usageMap(rooms, input.prevPeriod);
     const warnings = [];
     const lines = [];
+    if (period.startDate && !period.endDate) warnings.push({ code: 'noEndDate', msg: '尚未填「本次抄表日」，繳費通知單的抄表期間會顯示「本次抄表日未填」，列印前請補上' });
 
     for (const room of rooms) {
       if (!room.active) continue;
@@ -239,6 +240,14 @@
     };
   }
 
+  // ---------- 抄表期間文字（迄日、起日沒填時不顯示問號） ----------
+  function dateRangeText(start, end) {
+    if (start && end) return `${start} ～ ${end}`;
+    if (start) return `${start} 起（本次抄表日未填）`;
+    if (end) return `至 ${end}（上次抄表日未填）`;
+    return '';
+  }
+
   // ---------- 匯入抄表 CSV ----------
   const FIELDS = { meterId: '電表編號', room: '房號', prev: '上期度數', curr: '本期度數', oldFinal: '舊表最後度數', newStart: '新表起始度數', note: '備註' };
 
@@ -298,5 +307,5 @@
     return { version: 1, settings: obj.settings || {}, rooms: obj.rooms, periods: obj.periods, current: obj.current || (obj.periods[obj.periods.length - 1] || {}).id };
   }
 
-  return { DEFAULTS, FIELDS, num, roundMoney, parseCSV, loadCSV, toCSV, usageOf, usageMap, carryForward, computePeriod, applyReadingsCSV, summaryRows, validateBackup };
+  return { DEFAULTS, FIELDS, num, roundMoney, parseCSV, loadCSV, toCSV, usageOf, usageMap, carryForward, computePeriod, dateRangeText, applyReadingsCSV, summaryRows, validateBackup };
 });
