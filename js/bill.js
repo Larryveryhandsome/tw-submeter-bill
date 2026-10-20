@@ -28,6 +28,7 @@
       .replace(/[０-９．－]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
       .replace(/[,，\s]/g, '');
     if (s === '') return null;
+    if (!/^[+-]?(\d+\.?\d*|\.\d+)$/.test(s)) return null;   // 不收 0x10、1e3、Infinity 這類寫法
     const n = Number(s);
     return Number.isFinite(n) ? n : null;
   }
@@ -73,8 +74,10 @@
   /** 陣列的陣列 → CSV 文字（CRLF，Excel 習慣）。bom=true 時開頭加 UTF-8 BOM，Excel 才不會亂碼。 */
   function toCSV(rows, bom) {
     const cell = v => {
-      const s = v === null || v === undefined ? '' : String(v);
-      return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+      let s = v === null || v === undefined ? '' : String(v);
+      // 防 CSV 公式注入：文字開頭是 = + - @ Tab 換行時加單引號（純數字，含負數，不動）
+      if (typeof v === 'string' && /^[\t\r\s]*[=+\-@]|^[\t\r]/.test(s) && !/^-?\d+(\.\d+)?$/.test(s)) s = "'" + s;
+      return /[",\r\n\t]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
     };
     return (bom ? '﻿' : '') + rows.map(r => r.map(cell).join(',')).join('\r\n') + '\r\n';
   }
@@ -119,7 +122,9 @@
     const readings = {};
     for (const room of rooms) {
       const prevRd = last && last.readings && last.readings[room.id];
-      const c = prevRd ? num(prevRd.curr) : null;
+      // 上期有填本期度數就用它；沒填（漏抄）就沿用上期的上期度數，下次抄表時才不會憑空少算一段
+      let c = prevRd ? num(prevRd.curr) : null;
+      if (c === null && prevRd) c = num(prevRd.prev);
       readings[room.id] = { prev: c === null ? '' : c, curr: '', replaced: false, oldFinal: '', newStart: '', note: '' };
     }
     return {
@@ -157,6 +162,10 @@
       if (u.status === 'missing') w.push({ code: 'missing', msg: u.detail });
       if (u.status === 'negative') w.push({ code: 'negative', msg: `用電 ${u.usage} 度為負數：${u.detail}` });
       if (u.status === 'ok' && rd.replaced) w.push({ code: 'replaced', msg: u.detail });
+      const pr = input.prevPeriod && input.prevPeriod.readings && input.prevPeriod.readings[room.id];
+      if (pr && num(pr.curr) !== null && num(rd.prev) !== null && num(pr.curr) !== num(rd.prev)) {
+        w.push({ code: 'chainBreak', msg: `上期度數 ${num(rd.prev)} 和前一期的本期度數 ${num(pr.curr)} 不一致（是不是改過前一期？）` });
+      }
       const p = prevUse[room.id];
       if (u.status === 'ok' && p > 0 && u.usage > p * S.spikeFactor && u.usage - p >= S.spikeMinKwh) {
         w.push({ code: 'spike', msg: `用電 ${u.usage} 度，是上期 ${p} 度的 ${r2(u.usage / p)} 倍，請確認` });
@@ -205,17 +214,27 @@
     }
     const rawSum = ok.reduce((s, l) => s + l.raw, 0);
 
-    // 取整與差額
-    ok.forEach(l => { l.amount = roundMoney(l.raw, S.rounding); });
+    // 取整與差額：全部換成「最小單位」整數算（元；不取整時是 0.01 元），避免浮點誤差，
+    // 合計一定等於原始總額（四捨五入到最小單位）。差額加在最後一間；
+    // 如果最後一間扣到變負數（例如空房度數 0），多出來的往前一間扣，不會出現負的應繳金額。
+    const unit = S.rounding === 'none' ? 0.01 : 1;
+    const toU = x => Math.round(Number((x / unit).toFixed(6)));
+    ok.forEach(l => { l.amount = S.rounding === 'none' ? r2(l.raw) : roundMoney(l.raw, S.rounding); });
     let roundingDiff = 0;
-    if (S.rounding !== 'none' && ok.length) {
-      const target = roundMoney(rawSum, 'round');
-      const sum = ok.reduce((s, l) => s + l.amount, 0);
-      roundingDiff = target - sum;
-      if (S.remainder === 'last' && roundingDiff !== 0) {
-        const last = ok[ok.length - 1];
-        last.amount += roundingDiff;
-        last.warnings.push({ code: 'remainder', msg: `取整差額 ${roundingDiff > 0 ? '+' : ''}${roundingDiff} 元加在這間` });
+    if (ok.length) {
+      const targetU = toU(rawSum);
+      const sumU = ok.reduce((s2, l) => s2 + toU(l.amount), 0);
+      let diffU = targetU - sumU;
+      roundingDiff = r2(diffU * unit);
+      if (S.remainder === 'last' && diffU !== 0) {
+        for (let i = ok.length - 1; i >= 0 && diffU !== 0; i--) {
+          const l = ok[i], curU = toU(l.amount);
+          const take = diffU < 0 ? Math.max(diffU, -curU) : diffU;
+          if (take === 0) continue;
+          l.amount = r2((curU + take) * unit);
+          l.warnings.push({ code: 'remainder', msg: `取整差額 ${take > 0 ? '+' : ''}${r2(take * unit)} 元加在這間` });
+          diffU -= take;
+        }
       }
     }
 
@@ -298,13 +317,53 @@
   }
 
   // ---------- 備份 ----------
-  /** 檢查匯入的 JSON 備份；格式不對丟錯誤 */
+  const BAD_KEY = /^(__proto__|constructor|prototype)$/;
+  const ENUMS = { mode: ['fixed', 'ratio'], commonMode: ['equal', 'usage', 'landlord'], rounding: ['round', 'ceil', 'floor', 'none'], remainder: ['last', 'landlord'] };
+  const NUM_SETTINGS = ['unitPrice', 'minCharge', 'spikeFactor', 'spikeMinKwh'];
+  /**
+   * 檢查並「重建」匯入的 JSON 備份：只收白名單欄位、型別強制轉換、
+   * 擋掉 __proto__／constructor 之類的 id、重複 id 直接報錯。格式不對丟錯誤。
+   */
   function validateBackup(obj) {
     if (!obj || typeof obj !== 'object') throw new Error('不是有效的備份檔');
     if (!Array.isArray(obj.rooms) || !Array.isArray(obj.periods)) throw new Error('備份檔缺少 rooms 或 periods');
-    for (const r of obj.rooms) if (!r || typeof r.id !== 'string') throw new Error('房間資料缺少 id');
-    for (const p of obj.periods) if (!p || typeof p.id !== 'string' || typeof p.readings !== 'object') throw new Error('期別資料格式不對');
-    return { version: 1, settings: obj.settings || {}, rooms: obj.rooms, periods: obj.periods, current: obj.current || (obj.periods[obj.periods.length - 1] || {}).id };
+    if (obj.rooms.length > 5000 || obj.periods.length > 2000) throw new Error('備份檔太大（房間超過 5000 或期別超過 2000）');
+    const str = (v, max) => (v === null || v === undefined || typeof v === 'object' ? '' : String(v)).slice(0, max || 100);
+    const val = v => {                       // 度數／金額欄位：數字或數字字串，其他一律清空
+      if (typeof v === 'number') return Number.isFinite(v) ? v : '';
+      const n = num(v);
+      return n === null ? '' : n;
+    };
+    const ids = new Set();
+    const rooms = obj.rooms.map(r => {
+      if (!r || typeof r !== 'object' || typeof r.id !== 'string' || !r.id) throw new Error('房間資料缺少 id');
+      if (BAD_KEY.test(r.id)) throw new Error('房間 id 不合法：' + r.id);
+      if (ids.has(r.id)) throw new Error('房間 id 重複：' + r.id);
+      ids.add(r.id);
+      return { id: str(r.id, 60), floor: str(r.floor, 20), room: str(r.room, 40), meterId: str(r.meterId, 60), tenant: str(r.tenant, 60), active: r.active !== false };
+    });
+    const pids = new Set();
+    const periods = obj.periods.map(p => {
+      if (!p || typeof p.id !== 'string' || !p.id || !p.readings || typeof p.readings !== 'object' || Array.isArray(p.readings)) throw new Error('期別資料格式不對');
+      if (BAD_KEY.test(p.id)) throw new Error('期別 id 不合法：' + p.id);
+      if (pids.has(p.id)) throw new Error('期別 id 重複：' + p.id);
+      pids.add(p.id);
+      const readings = {};
+      Object.keys(p.readings).forEach(k => {
+        if (BAD_KEY.test(k)) return;
+        const rd = p.readings[k] || {};
+        readings[k] = { prev: val(rd.prev), curr: val(rd.curr), replaced: !!rd.replaced, oldFinal: val(rd.oldFinal), newStart: val(rd.newStart), note: str(rd.note, 200) };
+      });
+      const bill = p.bill && typeof p.bill === 'object' ? p.bill : {};
+      return { id: str(p.id, 60), label: str(p.label, 60), startDate: str(p.startDate, 10), endDate: str(p.endDate, 10),
+        bill: { amount: val(bill.amount), kwh: val(bill.kwh) }, readings };
+    });
+    const settings = {};
+    const st = obj.settings && typeof obj.settings === 'object' ? obj.settings : {};
+    Object.keys(ENUMS).forEach(k => { if (ENUMS[k].includes(st[k])) settings[k] = st[k]; });
+    NUM_SETTINGS.forEach(k => { const n = num(st[k]); if (n !== null && n >= 0) settings[k] = n; });
+    const cur = typeof obj.current === 'string' && pids.has(obj.current) ? obj.current : (periods[periods.length - 1] || {}).id;
+    return { version: 1, settings, rooms, periods, current: cur };
   }
 
   return { DEFAULTS, FIELDS, num, roundMoney, parseCSV, loadCSV, toCSV, usageOf, usageMap, carryForward, computePeriod, dateRangeText, applyReadingsCSV, summaryRows, validateBackup };

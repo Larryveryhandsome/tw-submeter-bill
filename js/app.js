@@ -26,11 +26,21 @@
   } catch (e) { state = null; }
   if (!state) state = sampleState();
 
+  let saveFailed = false;
   const save = () => {
-    try { localStorage.setItem(KEY, JSON.stringify(state)); fromStorage = true; }
-    catch (e) { /* 存不了（私密視窗等）就只用這一次 */ }
+    try { localStorage.setItem(KEY, JSON.stringify(state)); fromStorage = true; saveFailed = false; }
+    catch (e) {
+      // 存不了（私密視窗、空間滿了）：不能靜悄悄，不然使用者以為有存
+      if (!saveFailed) alert('儲存失敗：瀏覽器不允許寫入（私密視窗或儲存空間已滿）。這次的變更沒有存下來，請立刻按「匯出備份」把資料存成檔案。');
+      saveFailed = true;
+    }
     showDataInfo();
   };
+  // 別的分頁改了資料 → 這頁重新讀入，避免兩個分頁互相用舊資料覆蓋
+  window.addEventListener('storage', e => {
+    if (e.key !== KEY || e.newValue === null) return;
+    try { state = B.validateBackup(JSON.parse(e.newValue)); fromStorage = true; renderAll(); } catch (err) { /* 壞資料就忽略 */ }
+  });
   const settings = () => Object.assign({}, B.DEFAULTS, cfgSettings(), state.settings);
   const curIndex = () => Math.max(0, state.periods.findIndex(p => p.id === state.current));
   const curPeriod = () => state.periods[curIndex()];
@@ -59,7 +69,7 @@
   }
   function bindSettings() {
     const set = (k, v) => { state.settings[k] = v; save(); renderSettings(); calc(); };
-    const numOr = (v, d) => { const n = B.num(v); return n === null ? d : n; };
+    const numOr = (v, d) => { const n = B.num(v); return n === null || n < 0 ? d : n; };
     $('sMode').onchange = e => set('mode', e.target.value);
     $('modeQuick').onchange = e => set('mode', e.target.value);
     $('sUnit').onchange = e => set('unitPrice', numOr(e.target.value, 0));
@@ -263,7 +273,7 @@
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
-  const today = () => new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const today = () => { const d = new Date(); return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`; };  // 本機日期，不是 UTC
   function readFile(input, cb) {
     const f = input.files && input.files[0];
     if (!f) return;
@@ -274,7 +284,7 @@
   function showDataInfo() {
     let ok = true;
     try { localStorage.setItem(KEY + ':t', '1'); localStorage.removeItem(KEY + ':t'); } catch (e) { ok = false; }
-    $('dataInfo').textContent = !ok ? '這個瀏覽器不能存資料（可能是私密視窗），關掉網頁後會消失，請記得匯出備份。'
+    $('dataInfo').textContent = saveFailed ? '⚠ 最近一次儲存失敗，變更沒有存下來！請立刻按「匯出備份」。' : !ok ? '這個瀏覽器不能存資料（可能是私密視窗），關掉網頁後會消失，請記得匯出備份。'
       : fromStorage ? `已存在這台電腦：${state.rooms.length} 間房、${state.periods.length} 期。` : '目前是示範資料，修改後會自動存在這台電腦。';
   }
   function bindData() {
@@ -292,6 +302,7 @@
       download(`分租電費-${(p.label || '本期').replace(/[\\/:*?"<>|\s]/g, '')}.csv`, B.toCSV(B.summaryRows(last, p), true), 'text/csv;charset=utf-8');
     };
     $('fileCSV').onchange = e => readFile(e.target, text => {
+      if (!confirm('匯入抄表 CSV 會覆蓋「' + (curPeriod().label || '本期') + '」裡同電表的度數，要繼續嗎？（建議先匯出備份）')) return;
       const r = B.applyReadingsCSV(state.rooms, curPeriod(), text, CFG.fields);
       state.periods[curIndex()] = r.period;
       save(); renderReadings(); calc();
