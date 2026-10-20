@@ -1,0 +1,107 @@
+:root {
+  --bg: #f6f7f9; --card: #fff; --text: #1f2937; --muted: #6b7280; --line: #d1d5db; --head: #0f766e; --stripe: #f0faf8;
+  --warn-bg: #fff7ed; --bad: #b91c1c; --accent: #0f766e;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #111827; --card: #1f2937; --text: #e5e7eb; --muted: #9ca3af; --line: #374151; --stripe: #1f3a37; --warn-bg: #3b2a17; --bad: #f87171; color-scheme: dark; }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { overflow-x: hidden; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", sans-serif; font-size: 15px; }
+h2 { font-size: 1.15rem; margin: 0 0 10px; }
+.top { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center; padding: 14px 16px; background: var(--card); border-bottom: 1px solid var(--line); }
+.top h1 { margin: 0; font-size: 1.4rem; }
+.summary { color: var(--muted); margin-top: 4px; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+main { max-width: 1200px; margin: 0 auto; padding: 14px 16px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; min-width: 0; }
+details.card > summary { cursor: pointer; font-weight: bold; }
+details.card[open] > summary { margin-bottom: 10px; }
+button, .file, select, input { font: inherit; color: inherit; background: var(--card); border: 1px solid var(--line); border-radius: 6px; }
+button, .file { padding: 6px 12px; cursor: pointer; display: inline-block; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.danger { color: var(--bad); }
+button.small { padding: 2px 8px; font-size: .85em; }
+button:disabled { opacity: .5; cursor: default; }
+select, input { padding: 5px 6px; max-width: 100%; }
+input[type=checkbox] { width: 1.1em; height: 1.1em; vertical-align: middle; }
+.file input { display: none; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+.row.between { justify-content: space-between; margin-top: 0; }
+.row.between h2 { margin: 0; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin: 10px 0; }
+.grid label { display: flex; flex-direction: column; gap: 4px; font-size: .9em; color: var(--muted); }
+.grid input, .grid select { width: 100%; color: var(--text); }
+.hint { color: var(--muted); font-size: .9em; }
+.scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
+.tbl { border-collapse: collapse; width: 100%; font-size: 14px; }
+.tbl th, .tbl td { border: 1px solid var(--line); padding: 5px 6px; text-align: center; white-space: nowrap; }
+.tbl th { background: var(--head); color: #fff; }
+.tbl tbody tr:nth-child(even) td { background: var(--stripe); }
+.tbl tr.warn td { background: var(--warn-bg) !important; }
+.tbl tr.inactive td { opacity: .55; }
+.tbl tfoot td { font-weight: bold; border-top: 2px solid var(--text); }
+.tbl td.left { text-align: left; }
+.tbl td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.tbl td input:not([type=checkbox]) { width: 6.5em; }
+.tbl td.small { white-space: normal; min-width: 10em; }
+.strong { font-weight: bold; }
+.sub { font-size: .8em; color: var(--muted); }
+.small { font-size: .85em; }
+.inline { white-space: nowrap; }
+.swap { display: flex; gap: 6px; margin-top: 4px; }
+.swap label { display: flex; flex-direction: column; font-size: .8em; color: var(--muted); }
+.swap input { width: 5.5em !important; color: var(--text); }
+.warnings ul { margin: 10px 0 0; padding-left: 1.2em; }
+.warnings li.bad { color: var(--bad); }
+.warnings li.info { color: var(--muted); }
+.totals { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-top: 12px; }
+.totals div { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.totals span { color: var(--muted); font-size: .85em; }
+.notes { margin: 0; padding-left: 1.2em; line-height: 1.7; }
+body.mode-fixed .ratio-only { display: none; }
+body.mode-ratio .fixed-only { display: none; }
+
+/* 繳費通知單 */
+.notices { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+.notice { border: 1px dashed var(--line); border-radius: 8px; padding: 14px; break-inside: avoid; page-break-inside: avoid; }
+.notice h3 { margin: 0; text-align: center; font-size: 1.2rem; letter-spacing: .2em; }
+.nmeta { text-align: center; color: var(--muted); margin: 4px 0 10px; font-size: .9em; }
+.ntbl { width: 100%; border-collapse: collapse; font-size: 14px; }
+.ntbl th, .ntbl td { border-bottom: 1px solid var(--line); padding: 4px 6px; text-align: left; }
+.ntbl th { width: 7.5em; color: var(--muted); font-weight: normal; }
+.due { margin: 12px 0 6px; font-size: 1.05rem; text-align: right; }
+.due b { font-size: 1.5rem; }
+.nfoot { margin-top: 8px; text-align: right; font-size: .9em; }
+footer { text-align: center; color: var(--muted); padding: 20px; }
+
+@media (max-width: 640px) {
+  .top h1 { font-size: 1.2rem; }
+  .notices { grid-template-columns: 1fr; }
+  .grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 400px) { .grid { grid-template-columns: 1fr; } }
+
+@media print {
+  @page { size: A4 portrait; margin: 10mm; }
+  :root { --text: #000; --muted: #444; --line: #999; --card: #fff; --stripe: #f3f3f3; --warn-bg: #fff; color-scheme: light; }
+  body { background: #fff; color: #000; font-size: 12px; }
+  .no-print { display: none !important; }
+  main { padding: 0; max-width: none; }
+  .card { border: none; padding: 0; margin: 0; }
+  .scroll { overflow: visible; }
+  .tbl { font-size: 11px; }
+  .tbl th { background: #0f766e !important; color: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  /* 只印通知單：一頁兩張（半頁一張） */
+  body.print-notices #summarySection { display: none; }
+  body.print-notices .notices { display: block; }
+  body.print-notices .notice { height: 133mm; margin: 0 0 4mm; border: 1px dashed #666; font-size: 13px; }
+  body.print-notices .notice:nth-child(2n) { break-after: page; page-break-after: always; }
+  /* 只印總表 */
+  body.print-summary #noticeSection { display: none; }
+  /* 沒指定時（瀏覽器選單直接列印）：總表＋通知單都印，通知單另起一頁 */
+  body:not(.print-notices):not(.print-summary) #noticeSection { break-before: page; page-break-before: always; }
+  .print-title { display: block; text-align: center; }
+}
