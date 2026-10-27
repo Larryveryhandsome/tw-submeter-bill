@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>分租電費計算</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="top no-print">
+    <div>
+      <h1 id="title">分租電費計算</h1>
+      <div id="summary" class="summary"></div>
+    </div>
+    <div class="actions">
+      <label>計費方式
+        <select id="modeQuick">
+          <option value="ratio">依台電帳單比例</option>
+          <option value="fixed">固定每度單價</option>
+        </select>
+      </label>
+      <button id="btnPrintNotices" type="button" class="primary">列印繳費通知單</button>
+      <button id="btnPrintSummary" type="button">列印總表</button>
+    </div>
+  </header>
+
+  <main>
+    <p id="saveBanner" class="no-print" role="status" style="margin:0 0 12px;padding:8px 12px;background:#fff7e6;border:1px solid #f1d39a;border-radius:8px;font-size:.9em;color:#6b4d12">資料只存在<b>這台裝置的這個瀏覽器</b>：換手機、清除瀏覽器資料、無痕模式或 Safari 久未開啟都可能消失。請定期到最下方「資料備份」按<b>匯出備份</b>。</p>
+    <!-- 本期抄表 -->
+    <section class="card no-print">
+      <div class="row between">
+        <h2>本期抄表</h2>
+        <div class="row">
+          <label>期別 <select id="periodSel"></select></label>
+          <button id="btnNewPeriod" type="button">開新的一期</button>
+          <button id="btnDelPeriod" type="button" class="danger">刪除這一期</button>
+        </div>
+      </div>
+      <div class="grid">
+        <label>期別名稱<input id="pLabel" type="text"></label>
+        <label>上次抄表日<input id="pStart" type="date"></label>
+        <label>本次抄表日<input id="pEnd" type="date"></label>
+        <label class="ratio-only">台電帳單金額（元）<input id="pAmount" type="text" inputmode="decimal"></label>
+        <label>台電帳單總度數<input id="pKwh" type="text" inputmode="decimal"></label>
+      </div>
+      <p class="hint" id="kwhHint">填了台電總度數，才算得出公共用電（總度數 − 各分表合計）。</p>
+      <div class="scroll"><table id="readTable" class="tbl"></table></div>
+      <p class="hint">「上期度數」開新一期時會自動帶入上一期的本期度數。這期有換電表就勾「換表」，填舊表最後度數和新表起始度數。</p>
+      <div id="warnings" class="warnings"></div>
+    </section>
+
+    <!-- 總表 -->
+    <section class="card" id="summarySection">
+      <h2 class="print-title" id="sumTitle">電費總表</h2>
+      <div class="scroll"><table id="sumTable" class="tbl"></table></div>
+      <div id="totals" class="totals"></div>
+    </section>
+
+    <!-- 繳費通知單（列印用，畫面上也看得到預覽） -->
+    <section class="card" id="noticeSection">
+      <h2 class="no-print">繳費通知單預覽</h2>
+      <div id="notices" class="notices"></div>
+    </section>
+
+    <!-- 計費設定 -->
+    <details class="card no-print" id="settingsBox">
+      <summary>計費設定</summary>
+      <div class="grid">
+        <label>計費方式
+          <select id="sMode">
+            <option value="ratio">依台電帳單比例分攤</option>
+            <option value="fixed">固定每度單價</option>
+          </select>
+        </label>
+        <label class="fixed-only">每度單價（元）<input id="sUnit" type="text" inputmode="decimal"></label>
+        <label>公共用電
+          <select id="sCommon">
+            <option value="equal">有效房間平均分</option>
+            <option value="usage">依用電比例分</option>
+            <option value="landlord">房東負擔</option>
+          </select>
+        </label>
+        <label>取整
+          <select id="sRound">
+            <option value="round">四捨五入到元</option>
+            <option value="ceil">無條件進位到元</option>
+            <option value="floor">無條件捨去到元</option>
+            <option value="none">不取整（小數 2 位）</option>
+          </select>
+        </label>
+        <label>取整差額
+          <select id="sRemainder">
+            <option value="last">加到最後一間</option>
+            <option value="landlord">由房東吸收</option>
+          </select>
+        </label>
+        <label>每間最低收費（元，0 = 不設）<input id="sMin" type="text" inputmode="decimal"></label>
+        <label>暴增提醒倍數（比上期多幾倍）<input id="sSpike" type="text" inputmode="decimal"></label>
+      </div>
+      <div class="row"><button id="btnResetSettings" type="button">恢復 config.js 預設</button></div>
+    </details>
+
+    <!-- 房間 -->
+    <details class="card no-print" id="roomsBox">
+      <summary>房間設定</summary>
+      <div class="scroll"><table id="roomTable" class="tbl"></table></div>
+      <div class="row"><button id="btnAddRoom" type="button">新增房間</button></div>
+      <p class="hint">取消勾選「計費」的房間（例如空房）不會出現在總表和通知單，也不參與公共用電分攤。</p>
+    </details>
+
+    <!-- 資料 -->
+    <details class="card no-print" id="dataBox">
+      <summary>資料備份與匯入匯出</summary>
+      <p id="dataInfo" class="hint"></p>
+      <div class="row">
+        <button id="btnExportJSON" type="button">匯出備份（JSON）</button>
+        <label class="file">匯入備份（JSON）<input type="file" id="fileJSON" accept=".json,application/json"></label>
+        <button id="btnExportCSV" type="button">匯出本期 CSV（Excel 可開）</button>
+        <label class="file">匯入抄表 CSV<input type="file" id="fileCSV" accept=".csv,text/csv"></label>
+      </div>
+      <div class="row">
+        <button id="btnSample" type="button">載入示範資料</button>
+        <button id="btnClear" type="button" class="danger">清除這台電腦存的資料</button>
+      </div>
+      <p class="hint">抄表 CSV 範本：<code>data/readings.example.csv</code>（欄位：電表編號、上期度數、本期度數、舊表最後度數、新表起始度數、備註）。
+        Excel 請用「另存新檔 → CSV UTF-8（逗號分隔）」。資料只存在這台電腦的瀏覽器，換電腦或清除瀏覽器資料前請先匯出備份。</p>
+    </details>
+
+    <details class="card no-print">
+      <summary>法規與注意事項</summary>
+      <ul class="notes">
+        <li>電費分攤原則上依《民法》及雙方租約約定；建議在租約中寫清楚計費方式（固定單價或依帳單比例）、公共用電怎麼分、抄表日。</li>
+        <li>台電住宅用電若為累進費率，用得越多每度越貴；以「台電帳單比例分攤」原則上較能反映實際成本，也較公平。</li>
+        <li>房東自行訂定每度單價時，原則上不得高於相關規定的上限。內政部「住宅租賃契約書範本」及相關應約定事項對電費計收有約定方式，各地方政府也可能另有規定，請以最新公告為準。</li>
+        <li>計算結果原則上僅供參考，實際應繳金額以租約與台電帳單為準。</li>
+      </ul>
+    </details>
+  </main>
+
+  <footer class="no-print"><small>tw-submeter-bill · Apache-2.0 · 計算結果原則上僅供參考</small><p class="custom-ad">需要改成你們公司的版本、幫忙安裝或串接？加 LINE 官方帳號 <a href="https://line.me/R/ti/p/@812ibtir" target="_blank" rel="noopener">@812ibtir</a>（留白事務所・林其衞），原則上 1～2 個工作天回覆報價。</p></footer>
+
+  <script src="config.js"></script>
+  <script src="data/sample.js"></script>
+  <script src="js/bill.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

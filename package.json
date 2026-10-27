@@ -1,0 +1,10 @@
+{
+  "name": "tw-submeter-bill",
+  "version": "1.0.0",
+  "description": "分租電費計算：套房／雅房分表抄表，固定單價或依台電帳單比例分攤，產生繳費通知單",
+  "license": "Apache-2.0",
+  "private": true,
+  "scripts": {
+    "test": "node --test"
+  }
+}

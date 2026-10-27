@@ -1,0 +1,5 @@
+* text=auto eol=lf
+# Excel 習慣的換行；data/sample.js 內的示範資料也是 CRLF，測試會比對
+*.csv text eol=crlf
+*.png binary
+*.jpg binary
